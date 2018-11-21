@@ -174,7 +174,7 @@ void Debugger::handle_command(std::string input) {
             std::vector<std::string> params{};
             std::copy(args.begin()+1, args.end(), std::back_inserter(params));
             if(params[0] == "dump") {
-                dump_registers();
+                // todo: implemente and call dump_registers();
             } else if(params[0] == "read") {
                 // todo: call get_register_value(reg)
             } else if(params[0] == "write") {
