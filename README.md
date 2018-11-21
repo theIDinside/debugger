@@ -4,7 +4,7 @@ Following some debugger tutorials to write my own debugger.
 
 #### Dependencies
 ---
-- [libelfin library](https://github.com/TartanLlama/libelfin/tree/fbreg)
+- [libelfin library](https://github.com/TartanLlama/libelfin/tree/fbreg), (clone into deps folder)
 - My command prompt library (exists in this repo, as a submodule).
 
 #### System calls
