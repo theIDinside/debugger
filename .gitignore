@@ -2,3 +2,4 @@ playground/
 cmake-build-debug/
 build/
 .idea
+*libelfin/
