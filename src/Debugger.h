@@ -15,7 +15,7 @@
 #include <set>
 #include <vector>
 #include "Breakpoint.h"
-#include "cmdprompt/CommandPrompt.h"
+#include "../deps/command_prompt/src/cmdprompt/CommandPrompt.h"
 
 enum CommandParameterAmt: int {
     ONE = 1,
@@ -35,23 +35,27 @@ public:
     Debugger(const String& program, pid_t pid);
     ~Debugger();
     void run();
-    void load_program(const String& debugee);
+
     void set_pid(pid_t pid);
-    void setup_command_prompt(Validator&& validator);
+    void setup_command_prompt();
     /*
      * --- Callable commands from the prompt ---
      */
-
-    void continue_execution();
-    void handle_command(const std::string& input);
-    void set_breakpoint();
-    std::vector<String> list_source_lines(usize line_no, usize no_lines);
+    void load_program(const String& debugee);
+    void handle_command(std::string input);
     /* ----------------------------------------*/
+    std::optional<String> m_program_name;
 private:
-    String m_program_name;
+    void set_breakpoint(InstructionAddr address);
+    void continue_execution();
+    void stepn(usize n=1);
+    void listn_source_lines(usize n=10);
+
+
     std::optional<pid_t> m_pid;
     std::map<InstructionAddr, Breakpoint> m_breakpoints;
+    std::vector<std::string> m_commands;
     bool setup;
-    std::unique_ptr<CommandPrompt> cmd;
+    CommandPrompt cmd;
     bool m_running;
 };

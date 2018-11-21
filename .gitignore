@@ -1,0 +1,4 @@
+playground/
+cmake-build-debug/
+build/
+.idea

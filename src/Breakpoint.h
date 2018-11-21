@@ -18,12 +18,12 @@ public:
     Breakpoint() = delete;
     Breakpoint(pid_t pid, InstructionAddress address);
     Breakpoint(const Breakpoint&);
-    Breakpoint(Breakpoint&&);
+    Breakpoint(Breakpoint&&) noexcept;
+    Breakpoint& operator=(const Breakpoint& bp);
     ~Breakpoint();
 
     void enable();
     void disable();
-
 
     auto is_enabled() -> bool;
     auto get_address() -> InstructionAddress;

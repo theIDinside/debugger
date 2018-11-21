@@ -11,15 +11,19 @@ enum Process: int {
 
 int main(int argc, char** argv) {
     if(argc != 2) {
-        std::cerr << "You need to provide tracee in order to start debugging.";
-        exit(1);
-    } else {
-        Debugger dbg{};
-        if(auto pid = fork(); pid == Process::Child) {
-
-        } else if(pid == Process::Parent) {
-            dbg.load_program(argv[1]);
-            dbg.set_pid(pid);
+        std::cerr << "\r\nYou need to provide tracee in order to start debugging." << std::endl;
+    } else if(argc >= 2) {
+        auto pid = fork();
+        if(pid == Process::Child) {
+            auto prog = argv[1];
+            if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
+                std::cerr << "Error in ptrace\n";
+            }
+            execl(prog, prog, nullptr);
+        } else if(pid >= Process::Parent) {
+            Debugger dbg{argv[1], pid};
+            dbg.load_program(dbg.m_program_name.value_or(argv[1]));
+            // dbg.set_pid(pid);
             dbg.run();
         }
     }
