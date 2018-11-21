@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.9)
+project(debugger)
+set(CMAKE_CXX_COMPILER clang++)
+set(CMAKE_CXX_STANDARD 17)
+set(EXECUTABLE_OUTPUT_PATH ../build/bin)
+set(SOURCES main.cpp src/Debugger.cpp src/Debugger.h src/Breakpoint.cpp src/Breakpoint.h src/utils.h src/cmdprompt/CommandPrompt.cpp src/cmdprompt/CommandPrompt.h)
+add_executable(debugger ${SOURCES})
