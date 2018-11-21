@@ -25,15 +25,21 @@ Another useful, and in this case crucial system call is
 ```cpp
     pid_t waitpid(pid_t pid, int *wstatus, int options);
 ```
-man pages says this about waitpid:
-```man
-    All  of  these system calls are used to wait for state changes in a child of the calling process, and obtain information about the child whose state has changed.  A state change is considered to be:
-    the child terminated; the child was stopped by a signal; or the child was resumed by a signal.  In the case of a terminated child, performing a wait allows the system to release the resources associated with the child;
-    if  a wait is not performed, then the terminated child remains in a "zombie" state (see NOTES below).
 
-    If  a child has already changed state, then these calls return immediately.  Otherwise, they block until either a child changes state or a signal handler interrupts the call (assuming that system calls are not
-    automatically restarted using the SA_RESTART flag of sigaction(2)).  In the remainder of this page, a child whose state has changed and which has not yet been waited upon by one of these system calls is termed waitable.
-```
+Collected from man pages, ($ man waitpid):
+> All  of  these system calls are used to wait for state changes in a child of the calling process, and obtain information about the
+> child whose state has changed.  A state change is considered to be:
+> - the child terminated
+> - the child was stopped by a signal
+> - or the child was resumed by a signal.
+>
+> In the case of a terminated child, performing a wait allows the system to release the resources associated with the child;
+> if  a wait is not performed, then the terminated child remains in a "zombie" state (see NOTES below).
+>
+> If  a child has already changed state, then these calls return immediately.  Otherwise, they block until either a child changes
+> state or a signal handler interrupts the call (assuming that system calls are not automatically restarted using the SA_RESTART
+> flag of sigaction(2)).  In the remainder of this page, a child whose state has changed and which has not yet been waited upon by
+> one of these system calls is termed waitable.
 
 So in our main.cpp, we use the system all fork(), which basically splits ("forks") this process into two, a child and parent process.
 The parent process, can then use waitpid, on the child process, to get signalled when state changes in the child. This is how we catch, when for example
