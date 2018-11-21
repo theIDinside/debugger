@@ -208,3 +208,7 @@ void Debugger::continue_execution() {
     auto options = 0;
     waitpid(m_pid.value(), &wait_status, options);
 }
+
+void Debugger::dump_registers() {
+    // todo: unimplemented. Dump all registers and their values
+}

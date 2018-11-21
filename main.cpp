@@ -23,7 +23,6 @@ int main(int argc, char** argv) {
         } else if(pid >= Process::Parent) {
             Debugger dbg{argv[1], pid};
             dbg.load_program(dbg.m_program_name.value_or(argv[1]));
-            // dbg.set_pid(pid);
             dbg.run();
         }
     }
