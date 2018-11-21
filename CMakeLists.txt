@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.9)
 project(debugger)
+add_subdirectory(deps/command_prompt)
 set(CMAKE_CXX_COMPILER clang++-6.0)
 set(CMAKE_CXX_STANDARD 17)
 set(EXECUTABLE_OUTPUT_PATH ../build/bin)
@@ -9,7 +10,7 @@ set(CMDPROMPT_LIB deps/command_prompt/src/cmdprompt/CommandPrompt.cpp deps/comma
 add_library(command_prompt STATIC ${CMDPROMPT_LIB})
 add_executable(debugger ${SOURCES})
 add_executable(debugee ./tests/debugee.cpp)
-set_target_properties(debugee PROPERTIES COMPILE_FLAGS "-g -O0 -std=c++17")
+set_target_properties(debugee PROPERTIES COMPILE_FLAGS "-g -O0 -std=c++17 -Wall")
 
 add_custom_target(
         libelfin
