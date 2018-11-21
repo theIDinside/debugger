@@ -1,3 +1,4 @@
 [submodule "deps/command_prompt"]
 	path = deps/command_prompt
 	url = https://github.com/theIDinside/command_prompt
+	branch = master
