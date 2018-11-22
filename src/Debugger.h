@@ -17,6 +17,7 @@
 #include "Breakpoint.h"
 #include "../deps/command_prompt/src/cmdprompt/CommandPrompt.h"
 #include <array>
+#include <sys/user.h>
 
 enum CommandParameterAmt: int {
     ONE = 1,
@@ -44,6 +45,16 @@ struct reg_descriptor {
     std::string name;
 };
 
+struct Block {
+    uint64_t base_address;
+    std::size_t block_length;
+    uint64_t* data;
+    Block(uint64_t address, std::size_t block_length) : base_address(address), block_length(block_length), data(new uint64_t[block_length]) {}
+    ~Block() {
+        delete[] data;
+    }
+};
+
 class Debugger {
 public:
     const static std::array<reg_descriptor, n_registers> g_register_descriptors;
@@ -69,11 +80,13 @@ private:
 
     /* register commands    */
     // register IO commands
-    void dump_registers();                                              // todo: unimplemented. Dump all registers and their values
-    void set_pc(uint64_t pc);                                           // todo: unimplemented. Set program counter to address pc
+    void dump_registers();
+    void set_pc(uint64_t pc);
     uint64_t get_pc();
-    void set_register_value(reg r, uint64_t value);                     // todo: unimplemented. Set register r to value
-    uint64_t get_register_value(reg r);                                 // todo: unimplemented. Get value in register r
+    void set_register_value(reg r, uint64_t value);
+    void set_register_struct(user_regs_struct& rf, reg r, uint64_t value);
+    uint64_t get_register_value(reg r);
+    uint64_t get_register_value_from_saved(user_regs_struct& reg_file, reg r);
     uint64_t get_register_val_dwarf_index(unsigned register_number);    // todo: unimplemented. Get value in register, using dwarf index
     // register search
     std::string get_register_name(reg r);                               // todo: unimplemented. Get register name, from reg descriptor
@@ -81,18 +94,19 @@ private:
     /*-------------------*/
 
     /* memory IO commands*/
-    uint64_t read_memory(uint64_t address);                             // todo: unimplemented. Read word (64 bits) from address
-    void write_memory(uint64_t address, uint64_t value);                // todo: unimplemented. Write word (64 bits) to address
-    /*-------------------*/
+    auto read_memory(uint64_t address);
+    auto read_memory_area(uint64_t address, std::size_t block_length);  // todo: write a function that reads a block of memory, instead of individual quad-words, use
 
+    void write_memory(uint64_t address, uint64_t value);
+    void write_block_to_memory(uint64_t address);                       // todo: write a function that writes a block of memory instead of individual quad-words
+    /*-------------------*/
     /*  command debugee commands */
     void wait_for_signal();                                             // todo: unimplemented. Wait for signal from tracee
     void set_breakpoint(InstructionAddr address);
+    void step_over_breakpoint();                                        // todo: unimplemented. Step over breakpoint, if next instruction has one
     void continue_execution();
     void stepn(usize n=1);                                              // todo: unimplemented. Step n instructions forward
-    void step_over_breakpoint();                                        // todo: unimplemented. Step over breakpoint, if next instruction has one
     /*---------------------------*/
-
     void listn_source_lines(usize n=10);                                // todo: unimplemented. List n source lines around this instruction address / location in source file
 
     std::optional<pid_t> m_pid;

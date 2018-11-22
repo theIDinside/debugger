@@ -68,5 +68,28 @@ Now, when this address is read, when the program we are debugging runs, the inte
 To disable this breakpoint, all we have to do, is at a later point in time, poke back the saved_data, to that address, thus removing the execution of int3.
 
 ## Registers and memory
-- The register data structures, can usually be found in /usr/include/sys/user.h
+- The register data structures, can usually be found in /usr/include/sys/user.h:
+```cpp
+    struct user_regs_struct
+```
 - DWARF register numbers are taken from the [System V x86_64 Application Binary Interface](https://www.uclibc.org/docs/psABI-x86_64.pdf).
+
+As it stands right now, reading and writing to memory locations, is done by reading/writing individual quad-words, using ptrace and the
+PEEKDATA and POKEDATA values of the request enum. To read/write blocks of data from/to memory, one can instead use the following system calls:
+
+```cpp
+           ssize_t process_vm_readv(pid_t pid,
+                                    const struct iovec *local_iov,
+                                    unsigned long liovcnt,
+                                    const struct iovec *remote_iov,
+                                    unsigned long riovcnt,
+                                    unsigned long flags);
+
+           ssize_t process_vm_writev(pid_t pid,
+                                     const struct iovec *local_iov,
+                                     unsigned long liovcnt,
+                                     const struct iovec *remote_iov,
+                                     unsigned long riovcnt,
+                                     unsigned long flags);
+```
+

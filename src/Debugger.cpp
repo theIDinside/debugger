@@ -7,6 +7,8 @@
 #include <sys/wait.h>
 #include "utils.h"
 #include <sstream>
+#include <sys/user.h>
+#include <iomanip>
 
 const std::array<reg_descriptor, n_registers> construct_register_array() {
     return std::array<reg_descriptor, n_registers>{{
@@ -120,12 +122,9 @@ void Debugger::setup_command_prompt() {
 }
 
 void Debugger::run() {
-    int wait_status;
-    auto options = 0;
-    waitpid(m_pid.value(), &wait_status, options);
+    wait_for_signal();
     m_running = true;
     if(setup) {
-        std::cout << "Enter commands: " << std::endl;
         while(this->m_running) {
             auto s = cmd.get_input().value_or(std::string{"unknown"});
             handle_command(s);
@@ -174,7 +173,7 @@ void Debugger::handle_command(std::string input) {
             std::vector<std::string> params{};
             std::copy(args.begin()+1, args.end(), std::back_inserter(params));
             if(params[0] == "dump") {
-                // todo: implemente and call dump_registers();
+                dump_registers();
             } else if(params[0] == "read") {
                 // todo: call get_register_value(reg)
             } else if(params[0] == "write") {
@@ -187,12 +186,7 @@ void Debugger::handle_command(std::string input) {
             std::cout << "\r\nErrr???" << std::endl;
     }
 }
-
-
-Debugger::~Debugger() {
-
-}
-
+Debugger::~Debugger() {}
 void Debugger::set_breakpoint(InstructionAddr address) {
     std::stringstream ss{""};
     ss << "\r\nSetting breakpoint @ " << std::hex << address;
@@ -201,14 +195,155 @@ void Debugger::set_breakpoint(InstructionAddr address) {
     bp.enable();
     m_breakpoints.insert({address, bp});
 }
-
 void Debugger::continue_execution() {
     ptrace(PTRACE_CONT, m_pid.value(), nullptr, nullptr);
+    wait_for_signal();
+}
+void Debugger::dump_registers() {
+    // todo: unimplemented. Dump all registers and their values
+    user_regs_struct rf;
+    ptrace(PTRACE_GETREGS, m_pid.value(), nullptr, &rf);
+    std::cout << "Printing register contents" << std::endl;
+    for(const auto& reg : g_register_descriptors) {
+        std::cout << '\r' << reg.name << ": " << "0x" << std::setfill('0') << std::setw(16) << std::hex << get_register_value_from_saved(rf, reg.r) << std::endl;
+    }
+}
+uint64_t Debugger::get_register_value_from_saved(user_regs_struct& reg_file, reg r) {
+    switch(r) {
+        case reg::rax:              return reg_file.rax;
+        case reg::rbx:              return reg_file.rbx;
+        case reg::rcx:              return reg_file.rcx;
+        case reg::rdx:              return reg_file.rdx;
+        case reg::rdi:              return reg_file.rdi;
+        case reg::rsi:              return reg_file.rsi;
+        case reg::rbp:              return reg_file.rbp;
+        case reg::rsp:              return reg_file.rsp;
+        case reg::r8:               return reg_file.r8;
+        case reg::r9:               return reg_file.r9;
+        case reg::r10:              return reg_file.r10;
+        case reg::r11:              return reg_file.r11;
+        case reg::r12:              return reg_file.r12;
+        case reg::r13:              return reg_file.r13;
+        case reg::r14:              return reg_file.r14;
+        case reg::r15:              return reg_file.r15;
+        case reg::rip:              return reg_file.rip;
+        case reg::rflags:           return reg_file.eflags;
+        case reg::cs:               return reg_file.cs;
+        case reg::orig_rax:         return reg_file.orig_rax;
+        case reg::fs_base:          return reg_file.fs_base;
+        case reg::gs_base:          return reg_file.gs_base;
+        case reg::fs:               return reg_file.fs;
+        case reg::gs:               return reg_file.gs;
+        case reg::ss:               return reg_file.ss;
+        case reg::ds:               return reg_file.ds;
+        case reg::es:               return reg_file.es;
+    }
+}
+uint64_t Debugger::get_register_value(reg r) {
+    user_regs_struct reg_file;
+    ptrace(PTRACE_GETREGS, m_pid.value(), nullptr, &reg_file); // load register values into user_regs_struct
+    switch(r) {
+        case reg::rax:              return reg_file.rax;
+        case reg::rbx:              return reg_file.rbx;
+        case reg::rcx:              return reg_file.rcx;
+        case reg::rdx:              return reg_file.rdx;
+        case reg::rdi:              return reg_file.rdi;
+        case reg::rsi:              return reg_file.rsi;
+        case reg::rbp:              return reg_file.rbp;
+        case reg::rsp:              return reg_file.rsp;
+        case reg::r8:               return reg_file.r8;
+        case reg::r9:               return reg_file.r9;
+        case reg::r10:              return reg_file.r10;
+        case reg::r11:              return reg_file.r11;
+        case reg::r12:              return reg_file.r12;
+        case reg::r13:              return reg_file.r13;
+        case reg::r14:              return reg_file.r14;
+        case reg::r15:              return reg_file.r15;
+        case reg::rip:              return reg_file.rip;
+        case reg::rflags:           return reg_file.eflags;
+        case reg::cs:               return reg_file.cs;
+        case reg::orig_rax:         return reg_file.orig_rax;
+        case reg::fs_base:          return reg_file.fs_base;
+        case reg::gs_base:          return reg_file.gs_base;
+        case reg::fs:               return reg_file.fs;
+        case reg::gs:               return reg_file.gs;
+        case reg::ss:               return reg_file.ss;
+        case reg::ds:               return reg_file.ds;
+        case reg::es:               return reg_file.es;
+    }
+}
+uint64_t Debugger::get_pc() {
+    return get_register_value(reg::rip);
+}
+void Debugger::set_pc(uint64_t pc) {
+    set_register_value(reg::rip, pc);
+}
+void Debugger::set_register_value(reg r, uint64_t value) {
+    user_regs_struct rf;
+    ptrace(PTRACE_GETREGS, m_pid.value(), nullptr, &rf);
+    set_register_struct(rf, r, value);
+    ptrace(PTRACE_SETREGS, m_pid.value(), nullptr, &rf);
+}
+void Debugger::set_register_struct(user_regs_struct &rf, reg r, uint64_t value) {
+    switch(r) {
+        case reg::rax:      rf.rax = value;        break;
+        case reg::rbx:      rf.rbx = value;        break;
+        case reg::rcx:      rf.rcx = value;        break;
+        case reg::rdx:      rf.rdx = value;        break;
+        case reg::rdi:      rf.rdi = value;        break;
+        case reg::rsi:      rf.rsi = value;        break;
+        case reg::rbp:      rf.rbp = value;        break;
+        case reg::rsp:      rf.rsp = value;        break;
+        case reg::r8:       rf.r8 = value;         break;
+        case reg::r9:       rf.r9 = value;         break;
+        case reg::r10:      rf.r10=value;          break;
+        case reg::r11:      rf.r11=value;          break;
+        case reg::r12:      rf.r12=value;          break;
+        case reg::r13:      rf.r13=value;          break;
+        case reg::r14:      rf.r14=value;          break;
+        case reg::r15:      rf.r15=value;          break;
+        case reg::rip:      rf.rip=value;          break;
+        case reg::rflags:   rf.eflags=value;       break;
+        case reg::cs:       rf.cs=value;           break;
+        case reg::orig_rax: rf.orig_rax=value;     break;
+        case reg::fs_base:  rf.fs_base=value;      break;
+        case reg::gs_base:  rf.gs_base=value;      break;
+        case reg::fs:       rf.fs=value;           break;
+        case reg::gs:       rf.gs=value;           break;
+        case reg::ss:       rf.ss=value;           break;
+        case reg::ds:       rf.ds=value;           break;
+        case reg::es:       rf.es=value;           break;
+    }
+}
+auto Debugger::read_memory(uint64_t address) {
+    return ptrace(PTRACE_PEEKDATA, m_pid.value(), address, nullptr);
+}
+void Debugger::write_memory(uint64_t address, uint64_t value) {
+    ptrace(PTRACE_POKEDATA, m_pid.value(), address, value);
+}
+
+void Debugger::step_over_breakpoint() {
+    // get program counter, to find out, where we are
+    // get breakpoint location in address, which should be where we are - 1
+    // this is, because when we hit an instruction, where we have placed int3,
+    // execution goes past the breakpoint
+    auto pc = get_pc();
+    auto breakpoint_address = pc - 1;
+
+    if(m_breakpoints.count(breakpoint_address) > 0) {
+        auto& bp = m_breakpoints[breakpoint_address];
+        if(bp.is_enabled()) {
+            set_pc(breakpoint_address);
+            bp.disable();
+            ptrace(PTRACE_SINGLESTEP, m_pid.value(), nullptr, nullptr);
+            wait_for_signal();
+            bp.enable();
+        }
+    }
+}
+
+void Debugger::wait_for_signal() {
     int wait_status;
     auto options = 0;
     waitpid(m_pid.value(), &wait_status, options);
-}
-
-void Debugger::dump_registers() {
-    // todo: unimplemented. Dump all registers and their values
 }
