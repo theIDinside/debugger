@@ -15,7 +15,7 @@ public:
     using InstructionAddress = std::intptr_t;
 
 
-    Breakpoint() = delete;
+    Breakpoint() = default;
     Breakpoint(pid_t pid, InstructionAddress address);
     Breakpoint(const Breakpoint&);
     Breakpoint(Breakpoint&&) noexcept;

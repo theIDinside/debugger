@@ -17,6 +17,7 @@ int main(int argc, char** argv) {
         if(pid == Process::Child) {
             auto prog = argv[1];
             if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
+
                 std::cerr << "Error in ptrace\n";
             }
             execl(prog, prog, nullptr);

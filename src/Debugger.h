@@ -88,7 +88,7 @@ private:
     uint64_t get_register_value(reg r);
     uint64_t get_register_value_from_saved(user_regs_struct& reg_file, reg r);
     uint64_t get_register_val_dwarf_index(unsigned register_number);    // todo: unimplemented. Get value in register, using dwarf index
-    // register search
+    // rzegister search
     std::string get_register_name(reg r);                               // todo: unimplemented. Get register name, from reg descriptor
     reg get_register_from_name(const std::string& name);                // todo: unimplemented. Get register descriptor from name
     /*-------------------*/

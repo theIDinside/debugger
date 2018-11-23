@@ -8,6 +8,7 @@
 #include "utils.h"
 #include <sstream>
 #include <sys/user.h>
+#include <string.h>
 #include <iomanip>
 
 const std::array<reg_descriptor, n_registers> construct_register_array() {
@@ -134,7 +135,8 @@ void Debugger::run() {
     }
 }
 
-void Debugger::handle_command(std::string input) {
+void Debugger::handle_command(std::string input)
+{
     auto args = strops::split(input);
     auto command = args[0];
     if (command == "unknown") {
@@ -161,9 +163,14 @@ void Debugger::handle_command(std::string input) {
     } else if(command == "listn") {
         // todo: call listn_source_lines(n)
     } else if(command == "step") {
-        // todo: call stepn();
+        stepn();
     } else if(command == "stepn") {
-        // todo: call stepn(n);
+        if(args.size() < 2) {
+            cmd.print_error("usage of stepn command: step <value>");
+        } else {
+            auto steps = std::stoul(args[1]);
+            stepn(steps);
+        }
     } else if (command == "quit") {
             this->m_running = false;
     } else if(command == "register") {
@@ -175,13 +182,17 @@ void Debugger::handle_command(std::string input) {
             if(params[0] == "dump") {
                 dump_registers();
             } else if(params[0] == "read") {
-                // todo: call get_register_value(reg)
+                try {
+                    auto val = get_register_value(get_register_from_name(params[1]));
+                    cmd.print_data("Value: ", "0x", std::hex, val);
+                } catch(std::exception& e) {
+                    std::string msg = e.what();
+                    cmd.print_error(std::string{"Exception caught:"}, msg);
+                }
             } else if(params[0] == "write") {
                 // todo: call set_register_value(reg, value)
-            } else {
-                this->cmd.print_error("wrong paramater(s) to registers: register ", params[0], "\r\nproper usage of command: register <read|write|dump> <reg|reg value|>");
             }
-        };
+        }
     } else {
             std::cout << "\r\nErrr???" << std::endl;
     }
@@ -346,4 +357,47 @@ void Debugger::wait_for_signal() {
     int wait_status;
     auto options = 0;
     waitpid(m_pid.value(), &wait_status, options);
+    if(WIFSTOPPED(wait_status)) {
+        auto last_signal = WSTOPSIG(wait_status);
+        if(last_signal == SIGTRAP) {
+            auto address = get_pc();
+            std::string_view sigmsg{strsignal(wait_status>>8)};
+            if(sigmsg == "Trace/breakpoint trap") {
+                cmd.print_data("Halted by breakpoint @ address: 0x", std::hex, address-1);
+            } else {
+                cmd.print_data("Caught signal: ", sigmsg);
+            }
+        } else if(last_signal == SIGCONT) {
+            cmd.print_data("Continuing execution of debugee.");
+        }
+    } else if(WIFCONTINUED(wait_status)) {
+        auto last_signal = WIFCONTINUED(wait_status)>>8;
+        if(last_signal == SIGCONT) {
+            cmd.print_data("Continuing execution of debugee.");
+        }
+    }
+}
+
+reg Debugger::get_register_from_name(const std::string &name) {
+    auto res = std::find_if(g_register_descriptors.begin(), g_register_descriptors.end(), [&](auto&& reg_desc) {
+        return reg_desc.name == name;
+    });
+    if(res == g_register_descriptors.end()) {
+        std::string err_msg{"Couldn't find register with name <" + name + ">"};
+        throw std::range_error{err_msg};
+    }
+    return res->r;
+}
+
+std::string Debugger::get_register_name(reg r) {
+    auto cb = g_register_descriptors.cbegin();
+    auto ce = g_register_descriptors.cend();
+    auto res = std::find_if(cb, ce, [&](auto&& reg_desc) {
+        return reg_desc.r == r;
+    });
+    return res->name;
+}
+
+void Debugger::stepn(Debugger::usize n) {
+
 }
