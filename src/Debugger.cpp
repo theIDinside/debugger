@@ -42,8 +42,19 @@ const std::array<reg_descriptor, n_registers> construct_register_array() {
                                                            { reg::gs, 55, "gs" }
                                                    }};
 }
+
+static std::map<std::string, std::string> g_help{
+        {"break", "usage: break <address>, sets breakpoint at address"},
+        {"continue", "usage: continue, continues execution of tracee"},
+        {"quit", "Exits the debugger."},
+        {"register", "usage: register <read|write|dump> <reg|reg value|>. <read> reads the value from <reg>, register dump, prints all registers values. <write> <reg value>, writes value to register reg."},
+        {"memory", "usage: memory <read|write> <address|address <value>>. Reads value from address, or writes value to address"},
+        {"step", "usage: step <val>. Steps <val> steps forward."},
+        {"list", "usage: list <val>. List <val> source lines around the instruction, or current address where the tracee is halted."}
+};
+
 const std::vector<std::string> construct_commands() {
-    auto v = std::vector<std::string>{"break", "continue", "step", "stepn", "list", "listn", "load", "quit", "register"};
+    auto v = std::vector<std::string>{"break", "continue", "step", "stepn", "list", "listn", "load", "quit", "register", "memory", "help"};
     std::sort(v.begin(), v.end());
     return v;
 }
@@ -193,7 +204,17 @@ void Debugger::handle_command(std::string input)
                 // todo: call set_register_value(reg, value)
             }
         }
-    } else {
+    } else if(command == "help") {
+        if(args.size() < 2) {
+            cmd.print_data("------------------ Command help ------------------");
+            cmd.print_data(std::setw(15), std::left, "<Command>", "| ", "<help message>");
+            for(const auto& [command, help_txt] : g_help) {
+                cmd.print_data(std::setw(15), std::left, command, "| ", help_txt);
+            }
+            cmd.print_data("--------------------------------------------------");
+        }
+    }
+    else {
             std::cout << "\r\nErrr???" << std::endl;
     }
 }
@@ -207,6 +228,7 @@ void Debugger::set_breakpoint(InstructionAddr address) {
     m_breakpoints.insert({address, bp});
 }
 void Debugger::continue_execution() {
+    step_over_breakpoint();
     ptrace(PTRACE_CONT, m_pid.value(), nullptr, nullptr);
     wait_for_signal();
 }
@@ -333,7 +355,7 @@ void Debugger::write_memory(uint64_t address, uint64_t value) {
     ptrace(PTRACE_POKEDATA, m_pid.value(), address, value);
 }
 
-void Debugger::step_over_breakpoint() {
+void Debugger::step_over_breakpoint(bool continue_after) {
     // get program counter, to find out, where we are
     // get breakpoint location in address, which should be where we are - 1
     // this is, because when we hit an instruction, where we have placed int3,
@@ -367,12 +389,11 @@ void Debugger::wait_for_signal() {
             } else {
                 cmd.print_data("Caught signal: ", sigmsg);
             }
-        } else if(last_signal == SIGCONT) {
+        } else {
             cmd.print_data("Continuing execution of debugee.");
         }
     } else if(WIFCONTINUED(wait_status)) {
-        auto last_signal = WIFCONTINUED(wait_status)>>8;
-        if(last_signal == SIGCONT) {
+        if(wait_status == SIGCONT) {
             cmd.print_data("Continuing execution of debugee.");
         }
     }

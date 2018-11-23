@@ -103,7 +103,7 @@ private:
     /*  command debugee commands */
     void wait_for_signal();                                             // todo: unimplemented. Wait for signal from tracee
     void set_breakpoint(InstructionAddr address);
-    void step_over_breakpoint();                                        // todo: unimplemented. Step over breakpoint, if next instruction has one
+    void step_over_breakpoint(bool continue_after=false);                                        // todo: unimplemented. Step over breakpoint, if next instruction has one
     void continue_execution();
     void stepn(usize n=1);                                              // todo: unimplemented. Step n instructions forward
     /*---------------------------*/
