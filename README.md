@@ -1,6 +1,6 @@
 # Debugger
 
-Following some debugger tutorials to write my own debugger.
+Following some debugger tutorials to write my own debugger. <a id="id1">(1)</a>
 
 #### Dependencies
 ---
@@ -93,3 +93,28 @@ PEEKDATA and POKEDATA values of the request enum. To read/write blocks of data f
                                      unsigned long flags);
 ```
 
+
+## Executable and Linkable Format (ELF) and DWARF 
+-   [Link to the standard](http://www.skyfree.org/linux/references/ELF_Format.pdf)
+-   [Intro to DWARF debugging format](http://www.dwarfstd.org/doc/Debugging%20using%20DWARF-2012.pdf)
+
+The basic descriptive entity of DWARF is the DIE, Debuggin Information Entry. A DIE, has a tag which specifies what the DIE describes,
+and a list of attributes with further details. A DIE is contained within another DIE, unless it's the topmost. Attributes range from
+values, constant, variables or references to other DIEs, for example the type for a functions return value.
+
+
+## Register architecture
+
+Registers we will be looking at and utilize:
+- Program counter
+- Frame pointer (call stack)
+The call stack's primary purpose is to store the return address. [Wikipedia](https://en.wikipedia.org/wiki/Call_stack#Functions_of_the_call_stack).
+The frame pointer, points to the address where the return
+
+
+
+## Custom features added
+- [x] Adding functionality for easy setting of breakpoint at main().      
+
+### Custom feature documentation
+(1) [hlink](#id1)

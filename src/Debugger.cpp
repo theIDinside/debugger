@@ -4,13 +4,14 @@
 
 #include <iostream>
 #include "Debugger.h"
-#include <sys/wait.h>
 #include "utils.h"
 #include <sstream>
-#include <sys/user.h>
 #include <string.h>
 #include <iomanip>
+#include <fstream>
+#include <iterator>
 
+#define DEBUG 1
 const std::array<reg_descriptor, n_registers> construct_register_array() {
     return std::array<reg_descriptor, n_registers>{{
                                                            { reg::r15, 15, "r15" },
@@ -43,18 +44,19 @@ const std::array<reg_descriptor, n_registers> construct_register_array() {
                                                    }};
 }
 
-static std::map<std::string, std::string> g_help{
+static const std::map<std::string, std::string> g_help{
         {"break", "usage: break <address>, sets breakpoint at address"},
         {"continue", "usage: continue, continues execution of tracee"},
         {"quit", "Exits the debugger."},
         {"register", "usage: register <read|write|dump> <reg|reg value|>. <read> reads the value from <reg>, register dump, prints all registers values. <write> <reg value>, writes value to register reg."},
         {"memory", "usage: memory <read|write> <address|address <value>>. Reads value from address, or writes value to address"},
-        {"step", "usage: step <val>. Steps <val> steps forward."},
+        {"step", "usage: step. Steps 1 step forward."},
+        {"stepn", "usage: step <val>. Steps <val> steps forward."},
         {"list", "usage: list <val>. List <val> source lines around the instruction, or current address where the tracee is halted."}
 };
 
 const std::vector<std::string> construct_commands() {
-    auto v = std::vector<std::string>{"break", "continue", "step", "stepn", "list", "listn", "load", "quit", "register", "memory", "help"};
+    auto v = std::vector<std::string>{"break", "continue", "step", "stepn", "list", "listn", "load", "quit", "register", "memory", "help", "debug"};
     std::sort(v.begin(), v.end());
     return v;
 }
@@ -77,8 +79,11 @@ Debugger::Debugger(const Debugger::String &program, pid_t pid) :
     m_program_name(program), m_pid(pid),
     m_breakpoints{}, setup(true),
     m_commands{construct_commands()},
-    cmd{"debug> ", false} {
+    cmd{"debug> ", false}, entered_main_subroutine(false) {
     setup_command_prompt();
+    auto fd = open(m_program_name.value().c_str(), O_RDONLY);
+    m_elf = elf::elf{elf::create_mmap_loader(fd)};
+    m_dwarf = dwarf::dwarf{dwarf::elf::create_loader(m_elf)};
 }
 
 void Debugger::set_pid(pid_t pid) {
@@ -131,9 +136,11 @@ void Debugger::setup_command_prompt() {
             }
         }
     });
+    std::cout << "\x1b[39m";
 }
 
 void Debugger::run() {
+    set_breakpoint_at_main();
     wait_for_signal();
     m_running = true;
     if(setup) {
@@ -172,9 +179,10 @@ void Debugger::handle_command(std::string input)
     } else if(command == "list") {
         // todo: call listn_source_lines()
     } else if(command == "listn") {
-        // todo: call listn_source_lines(n)
+        auto line_iterator = get_line_entry_iterator_at(get_pc());
+        listn_source_lines(line_iterator->file->path, line_iterator->line);
     } else if(command == "step") {
-        stepn();
+        stepn(1);
     } else if(command == "stepn") {
         if(args.size() < 2) {
             cmd.print_error("usage of stepn command: step <value>");
@@ -212,9 +220,14 @@ void Debugger::handle_command(std::string input)
                 cmd.print_data(std::setw(15), std::left, command, "| ", help_txt);
             }
             cmd.print_data("--------------------------------------------------");
+        } else {
+            if(g_help.count(args[1]) > 0) {
+                cmd.print_data(g_help.at(args[1]));
+            }
         }
-    }
-    else {
+    } else if(command == "debug") {
+        debug_print();
+    } else {
             std::cout << "\r\nErrr???" << std::endl;
     }
 }
@@ -233,15 +246,15 @@ void Debugger::continue_execution() {
     wait_for_signal();
 }
 void Debugger::dump_registers() {
-    // todo: unimplemented. Dump all registers and their values
     user_regs_struct rf;
     ptrace(PTRACE_GETREGS, m_pid.value(), nullptr, &rf);
     std::cout << "Printing register contents" << std::endl;
     for(const auto& reg : g_register_descriptors) {
-        std::cout << '\r' << reg.name << ": " << "0x" << std::setfill('0') << std::setw(16) << std::hex << get_register_value_from_saved(rf, reg.r) << std::endl;
+        std::cout << '\r' << reg.name << ": " << "0x" << std::setfill('0') << std::setw(16) << std::hex << extract_register_value(
+                rf, reg.r) << std::endl;
     }
 }
-uint64_t Debugger::get_register_value_from_saved(user_regs_struct& reg_file, reg r) {
+uint64_t Debugger::extract_register_value(user_regs_struct &reg_file, reg r) {
     switch(r) {
         case reg::rax:              return reg_file.rax;
         case reg::rbx:              return reg_file.rbx;
@@ -361,12 +374,9 @@ void Debugger::step_over_breakpoint(bool continue_after) {
     // this is, because when we hit an instruction, where we have placed int3,
     // execution goes past the breakpoint
     auto pc = get_pc();
-    auto breakpoint_address = pc - 1;
-
-    if(m_breakpoints.count(breakpoint_address) > 0) {
-        auto& bp = m_breakpoints[breakpoint_address];
+    if(m_breakpoints.count(pc) > 0) {
+        auto& bp = m_breakpoints[pc];
         if(bp.is_enabled()) {
-            set_pc(breakpoint_address);
             bp.disable();
             ptrace(PTRACE_SINGLESTEP, m_pid.value(), nullptr, nullptr);
             wait_for_signal();
@@ -379,35 +389,65 @@ void Debugger::wait_for_signal() {
     int wait_status;
     auto options = 0;
     waitpid(m_pid.value(), &wait_status, options);
-    if(WIFSTOPPED(wait_status)) {
-        auto last_signal = WSTOPSIG(wait_status);
-        if(last_signal == SIGTRAP) {
-            auto address = get_pc();
-            std::string_view sigmsg{strsignal(wait_status>>8)};
-            if(sigmsg == "Trace/breakpoint trap") {
-                cmd.print_data("Halted by breakpoint @ address: 0x", std::hex, address-1);
+    auto signal_info = get_signal_info();
+    auto process = strops::format("[_]", m_pid.value());
+    switch(signal_info.si_signo) {
+        case SIGTRAP:
+            handle_signal_trap(signal_info);
+            break;
+        case SIGSEGV:
+            cmd.print_data(process, " Segfault: ", signal_info.si_code);
+            break;
+        default:
+            auto signal_caught = strsignal(signal_info.si_signo);
+            cmd.print_data(process, " Caught signal: ", signal_caught);
+            break;
+    }
+}
+
+siginfo_t Debugger::get_signal_info() {
+    siginfo_t info;
+    ptrace(PTRACE_GETSIGINFO, m_pid.value(), nullptr, &info);
+    return info;
+}
+
+void Debugger::handle_signal_trap(siginfo_t info) {
+    switch(info.si_code) {
+        case SI_KERNEL: {
+            auto msg = std::string{strsignal(info.si_signo)};
+            if(msg == "Trace/breakpoint trap") {
+
             } else {
-                cmd.print_data("Caught signal: ", sigmsg);
+                auto process = strops::format("[_]", m_pid.value());
+                cmd.print_data(process, " ", msg);
+                break;
             }
-        } else {
-            cmd.print_data("Continuing execution of debugee.");
-        }
-    } else if(WIFCONTINUED(wait_status)) {
-        if(wait_status == SIGCONT) {
-            cmd.print_data("Continuing execution of debugee.");
+        } case TRAP_BRKPT: {
+            set_pc(get_pc() - 1);
+            auto process = strops::format("[_]", m_pid.value());
+            cmd.print_data(process, " Hit breakpoint at address 0x", std::setfill('0'), std::setw(16), std::hex, get_pc());
+            // auto line_iterator = get_line_entry_iterator_at(get_pc());
+            // listn_source_lines(line_iterator->file->path, line_iterator->line);
+            break;
+        } case TRAP_TRACE: {
+            // signal caught when single stepping.
+            return;
+        } default: {
+            cmd.print_data("Unknown sigtrap code: ", info.si_code);
+            return;
         }
     }
 }
 
 reg Debugger::get_register_from_name(const std::string &name) {
-    auto res = std::find_if(g_register_descriptors.begin(), g_register_descriptors.end(), [&](auto&& reg_desc) {
-        return reg_desc.name == name;
-    });
-    if(res == g_register_descriptors.end()) {
+    auto cb = g_register_descriptors.cbegin();
+    auto ce = g_register_descriptors.cend();
+    if(auto res = std::find_if(cb, ce, [&](auto&& reg_desc) { return reg_desc.name == name; }); res == ce) {
         std::string err_msg{"Couldn't find register with name <" + name + ">"};
         throw std::range_error{err_msg};
+    } else {
+        return res->r;
     }
-    return res->r;
 }
 
 std::string Debugger::get_register_name(reg r) {
@@ -420,5 +460,134 @@ std::string Debugger::get_register_name(reg r) {
 }
 
 void Debugger::stepn(Debugger::usize n) {
+    step_over_breakpoint();
+    for(auto i = 0; i < n; ++i) {
+     ptrace(PTRACE_SINGLESTEP, m_pid.value(), nullptr, nullptr);
+     wait_for_signal();
+    }
+}
 
+/**
+ * Retrieves the function the program is currently in, when the program counter has value pc.
+ * @param pc
+ * @return dwarf::die
+ */
+dwarf::die Debugger::get_function_at_pc(uint64_t pc) {
+    for(const auto& compilation_unit : m_dwarf.compilation_units())
+        if(dwarf::die_pc_range(compilation_unit.root()).contains(pc))
+            for(const auto& die : compilation_unit.root())
+                if(die.tag == dwarf::DW_TAG::subprogram)
+                    if(dwarf::die_pc_range(die).contains(pc)) return die;
+    auto msg = strops::format_msg("Could not find function at address _", strops::fmt_val_to_address_str(pc));
+    throw std::out_of_range{msg};
+}
+
+uint64_t Debugger::get_register_val_dwarf_index(unsigned reg_num) {
+    auto cb = g_register_descriptors.cbegin();
+    auto ce = g_register_descriptors.cend();
+    if(auto it = std::find_if(cb, ce, [=](auto&& rd) { return rd.dwarf_reg == reg_num; }); it == ce)
+    {
+        auto err_msg = strops::format_msg("Unknown register index _", std::to_string(reg_num));
+        throw std::out_of_range{err_msg};
+    } else {
+        return get_register_value(it->r);
+    }
+}
+
+dwarf::line_table::iterator Debugger::get_line_entry_iterator_at(uint64_t pc) {
+    for(const auto& comp_unit : m_dwarf.compilation_units()) {
+        if(dwarf::die_pc_range(comp_unit.root()).contains(pc)) {
+            auto& lt = comp_unit.get_line_table();
+            auto it = lt.find_address(pc);
+            if(it == lt.end()) {
+                throw std::out_of_range{"Line entry not found"};
+            } else {
+                return it;
+            }
+        }
+    }
+    throw std::out_of_range{"Line entry not found"};
+}
+
+void Debugger::listn_source_lines(const std::string &source_file, Debugger::usize line_num, Debugger::usize context) {
+    std::ifstream source{source_file};
+    std::string line_item;
+    auto current_line = 0;
+
+    auto start = (line_num < context) ? 1 : line_num - context;
+    auto end = (line_num + context);
+
+    while(current_line < (line_num-context) && (line_num - context > 0)) {
+        current_line++;
+        auto _temp = std::string{};
+        std::getline(source, _temp, '\n');
+    }
+    while(current_line < (line_num+context+1) && !source.eof()) {
+        current_line++;
+        std::getline(source, line_item, '\n');
+        if(current_line == line_num) {
+            auto data = strops::format("\x1b[38;5;112m_>> ", current_line);
+            cmd.print_data(data, line_item, "\x1b[39m");
+        } else {
+            auto data = strops::format("_ : ", current_line);
+            cmd.print_data(data, line_item);
+        }
+    }
+    source.close();
+}
+
+void Debugger::single_step_with_breakpoint_check() {
+    if(m_breakpoints.count(get_pc())) {
+        step_over_breakpoint();
+    } else {
+        single_step_instruction();
+    }
+}
+
+void Debugger::single_step_instruction() {
+    ptrace(PTRACE_SINGLESTEP, m_pid.value(), nullptr, nullptr);
+    wait_for_signal();
+}
+
+
+void Debugger::set_breakpoint_at_main() {
+    cmd.print_data(strops::fmt_val_to_address_str(m_elf.get_hdr().entry));
+    for(const auto& sec : m_elf.sections()) {
+        auto name = sec.get_name();
+        if(name == ".symtab") {
+            for(auto sym : sec.as_symtab()) {
+                if(sym.get_name() == "main") {
+                    auto addr = strops::fmt_val_to_address_str(sym.get_data().value);
+                    cmd.print_data("Set breakpoint at main(): ", addr);
+                    set_breakpoint(std::stol(std::string{addr, 2, 16}, 0, 16));
+                }
+            }
+        }
+    }
+}
+
+void Debugger::debug_print() {
+    cmd.print_data(strops::fmt_val_to_address_str(m_elf.get_hdr().entry));
+    for(const auto& sec : m_elf.sections()) {
+        auto name = sec.get_name();
+        if(name == ".symtab") {
+            for(auto sym : sec.as_symtab()) {
+                cmd.print_data(sym.get_name());
+                if(sym.get_name() == "main") {
+                    auto addr = strops::fmt_val_to_address_str(sym.get_data().value);
+                    cmd.print_data("Address: ", addr);
+                }
+            }
+        }
+        cmd.print_data(name);
+    }
+    /*for(const auto& cu : m_dwarf.compilation_units()) {
+        if(dwarf::at_main_subprogram(cu.root())) {
+            for(const auto& die : cu.root()) {
+                if(dwarf::at_main_subprogram(die)) {
+
+                }
+            }
+        }
+    }*/
 }

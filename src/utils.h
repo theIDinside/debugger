@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <type_traits>
+#include <iomanip>
 
 using StrVec = std::vector<std::string>;
 using Str = std::string;
@@ -37,14 +39,36 @@ namespace strops {
         }
     }
 
+    // this template gets enabled and compiled, via the return type. If the SFINAE thing here, doesn't come out truthy,
+    // the return type will simply be "", and therefore not compiled at all. Beautiful.
+    template <typename T>
+    typename std::enable_if<std::is_arithmetic<T>::value, Str>::type fmt_val_to_address_str(T value) {
+        std::stringstream ss{""};
+        ss << "0x" << std::setfill('0') << std::setw(16) << std::hex << value;
+        return ss.str();
+    }
+
     template <typename ...Args>
     std::string format(const std::string& format_str, Args&&... args) {
         std::stringstream ss{};
         StrVec items = split(format_str, '_');
         auto it = items.cbegin();
-        if(items.size() != sizeof...(args))
+        if(items.size()-1 != sizeof...(args))
             throw std::range_error{"Parameter list size not equal to format string place holders"};
-        ss << ((*it++ + std::to_string(args)) + ...) << std::endl;
+        ss << ((*it++ + std::to_string(args)) + ...) << *it;
+        return ss.str();
+    }
+
+    template <typename ...Args>
+    std::string format_msg(const std::string& format_str, Args&&... msgs) {
+        std::stringstream ss{};
+        StrVec items = split(format_str, '_');
+        auto it = items.cbegin();
+        if(items.size()-1 != sizeof...(msgs)) {
+            throw std::range_error{"Format string not correctly formatted."};
+        }
+        auto i = 0;
+        ss << ((*it++ + msgs) + ...) << *it;
         return ss.str();
     }
 };

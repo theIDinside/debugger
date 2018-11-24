@@ -3,28 +3,30 @@
 //
 #pragma once
 
-#include <cstdint>
-#include <utility>
-#include <string_view>
-#include <string>
+// c-includes
 #include <sys/wait.h>
 #include <sys/ptrace.h>
+#include <sys/user.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <zconf.h>
+
+// standard cpp library
+#include <cstdint>
+#include <utility>
+#include <array>
+#include <string_view>
+#include <string>
 #include <map>
 #include <list>
 #include <set>
 #include <vector>
+// my own & 3rd party libs
 #include "Breakpoint.h"
 #include "../deps/command_prompt/src/cmdprompt/CommandPrompt.h"
-#include <array>
-#include <sys/user.h>
-
-enum CommandParameterAmt: int {
-    ONE = 1,
-    TWO = 2,
-    THREE = 3,
-    ARBITRARY // so if we type break 0xffffaaaa 0xabcd1234 0x0223aacc 0x11110202 ... 0x11114fff, it will add breakpoints to everyone in the list that is a valid address
-};
+#include "../deps/libelfin/dwarf/dwarf++.hh"
+#include "../deps/libelfin/elf/elf++.hh"
 
 enum class reg {
     rax, rbx, rcx, rdx,
@@ -61,7 +63,6 @@ public:
     using String = std::string;
     using InstructionAddr = std::intptr_t;
     using usize = std::size_t;
-    std::map<std::string, CommandParameterAmt> command_variations; // a command name -> a set of variations, either 1, 2... how many arguments
     Debugger();
     Debugger(const String& program, pid_t pid);
     ~Debugger();
@@ -86,8 +87,8 @@ private:
     void set_register_value(reg r, uint64_t value);
     void set_register_struct(user_regs_struct& rf, reg r, uint64_t value);
     uint64_t get_register_value(reg r);
-    uint64_t get_register_value_from_saved(user_regs_struct& reg_file, reg r);
-    uint64_t get_register_val_dwarf_index(unsigned register_number);    // todo: unimplemented. Get value in register, using dwarf index
+    uint64_t extract_register_value(user_regs_struct &reg_file, reg r);
+    uint64_t get_register_val_dwarf_index(unsigned reg_num);    // todo: unimplemented. Get value in register, using dwarf index
     // rzegister search
     std::string get_register_name(reg r);                               // todo: unimplemented. Get register name, from reg descriptor
     reg get_register_from_name(const std::string& name);                // todo: unimplemented. Get register descriptor from name
@@ -99,15 +100,26 @@ private:
 
     void write_memory(uint64_t address, uint64_t value);
     void write_block_to_memory(uint64_t address);                       // todo: write a function that writes a block of memory instead of individual quad-words
+
+    void watch_variable(uint64_t address);
+    void set_breakpoint_at_main();
     /*-------------------*/
     /*  command debugee commands */
     void wait_for_signal();                                             // todo: unimplemented. Wait for signal from tracee
     void set_breakpoint(InstructionAddr address);
+    void single_step_with_breakpoint_check();
+    void single_step_instruction();
     void step_over_breakpoint(bool continue_after=false);                                        // todo: unimplemented. Step over breakpoint, if next instruction has one
     void continue_execution();
     void stepn(usize n=1);                                              // todo: unimplemented. Step n instructions forward
     /*---------------------------*/
-    void listn_source_lines(usize n=10);                                // todo: unimplemented. List n source lines around this instruction address / location in source file
+    void listn_source_lines(const std::string& source_file, usize line_num, usize context=5);                                // todo: unimplemented. List n source lines around this instruction address / location in source file
+
+    dwarf::die get_function_at_pc(uint64_t pc);
+    dwarf::die get_die_at_pc(uint64_t pc, dwarf::DW_TAG tag);
+    dwarf::line_table::iterator get_line_entry_iterator_at(uint64_t pc);
+
+    siginfo_t get_signal_info();
 
     std::optional<pid_t> m_pid;
     std::map<InstructionAddr, Breakpoint> m_breakpoints;
@@ -115,4 +127,10 @@ private:
     bool setup;
     CommandPrompt cmd;
     bool m_running;
+    bool entered_main_subroutine;
+
+    dwarf::dwarf m_dwarf;
+    elf::elf m_elf;
+    void debug_print();
+    void handle_signal_trap(siginfo_t info);
 };
