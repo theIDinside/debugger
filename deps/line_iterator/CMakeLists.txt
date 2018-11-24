@@ -1,7 +1,0 @@
-cmake_minimum_required(VERSION 3.10)
-project(LineIterator)
-set(SOURCES LineIterator.cpp LineIterator.h)
-set(CMAKE_CXX_STANDARD 17)
-add_library(LineIteratorLibrary STATIC ${SOURCES})
-add_executable(lineiter_test example.cpp)
-target_link_libraries(lineiter_test LineIteratorLibrary)

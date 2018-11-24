@@ -1,6 +1,6 @@
 # Debugger
 
-Following some debugger tutorials to write my own debugger. <a id="id1">(1)</a>
+Following some debugger tutorials to write my own debugger.
 
 #### Dependencies
 ---
@@ -114,7 +114,7 @@ The frame pointer, points to the address where the return
 
 
 ## Custom features added
-- [x] Adding functionality for easy setting of breakpoint at main().      
+- [x] Adding functionality for easy [setting of breakpoint](#id1) at main().      
 
 ### Custom feature documentation
-(1) [hlink](#id1)
+1. <a id="id1">Setting breakpoint at main</a>
