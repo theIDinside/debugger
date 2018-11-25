@@ -18,6 +18,11 @@ namespace strops {
         return std::equal(prefix.cbegin(), prefix.cend(), str.cbegin());
     }
 
+    auto is_suffix_of(const std::string& suffix, const std::string& str) {
+        if(suffix.size() > str.size()) return false;
+        return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
+    }
+
     auto split(const std::string& data, const char delimiter=' ') ->  StrVec {
         auto v = StrVec{};
         std::stringstream ss{data};
@@ -44,7 +49,7 @@ namespace strops {
     template <typename T>
     typename std::enable_if<std::is_arithmetic<T>::value, Str>::type fmt_val_to_address_str(T value) {
         std::stringstream ss{""};
-        ss << "0x" << std::setfill('0') << std::setw(16) << std::hex << value;
+        ss << "0x" << std::setfill('0') << std::setw(8) << std::hex << value;
         return ss.str();
     }
 

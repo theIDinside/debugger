@@ -27,6 +27,7 @@
 #include "../deps/command_prompt/src/cmdprompt/CommandPrompt.h"
 #include "../deps/libelfin/dwarf/dwarf++.hh"
 #include "../deps/libelfin/elf/elf++.hh"
+#include "Symbol.h"
 
 enum class reg {
     rax, rbx, rcx, rdx,
@@ -90,8 +91,8 @@ private:
     uint64_t extract_register_value(user_regs_struct &reg_file, reg r);
     uint64_t get_register_val_dwarf_index(unsigned reg_num);    // todo: unimplemented. Get value in register, using dwarf index
     // rzegister search
-    std::string get_register_name(reg r);                               // todo: unimplemented. Get register name, from reg descriptor
-    reg get_register_from_name(const std::string& name);                // todo: unimplemented. Get register descriptor from name
+    std::string get_register_name(reg r);
+    reg get_register_from_name(const std::string& name);
     /*-------------------*/
 
     /* memory IO commands*/
@@ -102,18 +103,24 @@ private:
     void write_block_to_memory(uint64_t address);                       // todo: write a function that writes a block of memory instead of individual quad-words
 
     void watch_variable(uint64_t address);
-    void set_breakpoint_at_main();
     /*-------------------*/
     /*  command debugee commands */
-    void wait_for_signal();                                             // todo: unimplemented. Wait for signal from tracee
-    void set_breakpoint(InstructionAddr address);
+    void wait_for_signal();
+    // breakpoint related commands & functions
+    void set_breakpoint(InstructionAddr address, bool print=true);
+    void set_breakpoint_at_main();
+    void set_breakpoint_at_function(const std::string& func);
     void single_step_with_breakpoint_check();
+    void step_over_breakpoint(bool continue_after=false);
+    void set_breakpoint_at_source_line(const std::string& file_name, unsigned line);
+    void step_source_line(usize lines);
     void single_step_instruction();
-    void step_over_breakpoint(bool continue_after=false);                                        // todo: unimplemented. Step over breakpoint, if next instruction has one
     void continue_execution();
     void stepn(usize n=1);                                              // todo: unimplemented. Step n instructions forward
     /*---------------------------*/
     void listn_source_lines(const std::string& source_file, usize line_num, usize context=5);                                // todo: unimplemented. List n source lines around this instruction address / location in source file
+    void debug_print();
+    void handle_signal_trap(siginfo_t info);
 
     dwarf::die get_function_at_pc(uint64_t pc);
     dwarf::die get_die_at_pc(uint64_t pc, dwarf::DW_TAG tag);
@@ -128,9 +135,11 @@ private:
     CommandPrompt cmd;
     bool m_running;
     bool entered_main_subroutine;
-
     dwarf::dwarf m_dwarf;
     elf::elf m_elf;
-    void debug_print();
-    void handle_signal_trap(siginfo_t info);
+
+    std::vector<symbols::Symbol> lookup_symbol(const std::string &name);
+
+
+    std::map<std::string, std::set<symbols::Symbol>> m_symbol_lookup;
 };

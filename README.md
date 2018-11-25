@@ -113,8 +113,29 @@ The frame pointer, points to the address where the return
 
 
 
-## Custom features added
-- [x] Adding functionality for easy [setting of breakpoint](#id1) at main().      
+## Custom features to be added
+- [x] Adding functionality for easy [setting of breakpoint](#bp_main) at main().
+- [] [Stepping into a function](#functions_into) 
+- [] [Stepping out of a function](#functions_out)
+- [x] [Setting breakpoint at function, using it's symbol name](#bp_using_symbol_name)
+- [] [Read variable](#read_var)
+- [] [Watch variable](#watch_var)
+- [] [Writing to a variable](#write_var)
+      
 
 ### Custom feature documentation
-1. <a id="id1">Setting breakpoint at main</a>
+1. <a id="bp_main">Setting breakpoint at main</a>
+2. <a id="functions">Functions</a>
+    - <a id="functions_into">Stepping into a function</a>
+    
+    - <a id="functions_out">Stepping out of a function</a>
+    
+    - <a id="bp_using_symbol_name">Setting breakpoint, using symbol name</a>
+    
+3. <a id="read_var">Reading a variable</a>
+4. <a id="watch_var">Watch a variable</a>
+5. <a id="write_var">Writing to a variable</a>
+
+
+## Advanced features to study and possibly implement
+- C++ symbol demangling. Possibly use 3rd party library. Maybe write a foreign function interface API to C or directly to C++ for that [rust lib?](http://fitzgeraldnick.com/2017/02/22/cpp-demangle.html)

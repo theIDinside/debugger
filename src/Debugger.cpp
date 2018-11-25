@@ -46,17 +46,20 @@ const std::array<reg_descriptor, n_registers> construct_register_array() {
 
 static const std::map<std::string, std::string> g_help{
         {"break", "usage: break <address>, sets breakpoint at address"},
+        {"bf", "usage: bf <function name>, sets breakpoint at function start, if function can be found."},
         {"continue", "usage: continue, continues execution of tracee"},
         {"quit", "Exits the debugger."},
         {"register", "usage: register <read|write|dump> <reg|reg value|>. <read> reads the value from <reg>, register dump, prints all registers values. <write> <reg value>, writes value to register reg."},
         {"memory", "usage: memory <read|write> <address|address <value>>. Reads value from address, or writes value to address"},
         {"step", "usage: step. Steps 1 step forward."},
         {"stepn", "usage: step <val>. Steps <val> steps forward."},
-        {"list", "usage: list <val>. List <val> source lines around the instruction, or current address where the tracee is halted."}
+        {"stepi", "usage: stepi <val>. Steps <val> source lines forward."},
+        {"list", "usage: list <val>. List <val> source lines around the instruction, or current address where the tracee is halted."},
+        {"symbol", "usage: sy"}
 };
 
 const std::vector<std::string> construct_commands() {
-    auto v = std::vector<std::string>{"break", "continue", "step", "stepn", "list", "listn", "load", "quit", "register", "memory", "help", "debug"};
+    auto v = std::vector<std::string>{"break", "continue", "step", "stepn","stepi", "list", "listn", "load", "quit", "register", "memory", "help", "debug", "bf", "symbol"};
     std::sort(v.begin(), v.end());
     return v;
 }
@@ -79,7 +82,8 @@ Debugger::Debugger(const Debugger::String &program, pid_t pid) :
     m_program_name(program), m_pid(pid),
     m_breakpoints{}, setup(true),
     m_commands{construct_commands()},
-    cmd{"debug> ", false}, entered_main_subroutine(false) {
+    cmd{"debug> ", false}, entered_main_subroutine(false),
+    m_symbol_lookup{} {
     setup_command_prompt();
     auto fd = open(m_program_name.value().c_str(), O_RDONLY);
     m_elf = elf::elf{elf::create_mmap_loader(fd)};
@@ -177,10 +181,12 @@ void Debugger::handle_command(std::string input)
             }
         }
     } else if(command == "list") {
-        // todo: call listn_source_lines()
-    } else if(command == "listn") {
         auto line_iterator = get_line_entry_iterator_at(get_pc());
         listn_source_lines(line_iterator->file->path, line_iterator->line);
+    } else if(command == "listn") {
+        auto context = args.size() > 1 ? std::stol(args[1]) : 5;
+        auto line_iterator = get_line_entry_iterator_at(get_pc());
+        listn_source_lines(line_iterator->file->path, line_iterator->line, context);
     } else if(command == "step") {
         stepn(1);
     } else if(command == "stepn") {
@@ -225,6 +231,13 @@ void Debugger::handle_command(std::string input)
                 cmd.print_data(g_help.at(args[1]));
             }
         }
+    } else if(command == "bf") {
+        if(args.size() != 2) {
+            cmd.print_error("You need to provide function name to this command!");
+        } else {
+            auto function_name = args[1];
+            set_breakpoint_at_function(function_name);
+        }
     } else if(command == "debug") {
         debug_print();
     } else {
@@ -232,9 +245,10 @@ void Debugger::handle_command(std::string input)
     }
 }
 Debugger::~Debugger() {}
-void Debugger::set_breakpoint(InstructionAddr address) {
+void Debugger::set_breakpoint(InstructionAddr address, bool print) {
     std::stringstream ss{""};
-    ss << "\r\nSetting breakpoint @ " << std::hex << address;
+    if(print)
+        ss << "\r\nSetting breakpoint @ " << std::hex << address;
     cmd.print_data(ss.str());
     Breakpoint bp{m_pid.value(), address};
     bp.enable();
@@ -425,7 +439,7 @@ void Debugger::handle_signal_trap(siginfo_t info) {
         } case TRAP_BRKPT: {
             set_pc(get_pc() - 1);
             auto process = strops::format("[_]", m_pid.value());
-            cmd.print_data(process, " Hit breakpoint at address 0x", std::setfill('0'), std::setw(16), std::hex, get_pc());
+            cmd.print_data(process, " Hit breakpoint at address 0x", std::setfill('0'), std::setw(8), std::hex, get_pc());
             // auto line_iterator = get_line_entry_iterator_at(get_pc());
             // listn_source_lines(line_iterator->file->path, line_iterator->line);
             break;
@@ -559,7 +573,7 @@ void Debugger::set_breakpoint_at_main() {
                 if(sym.get_name() == "main") {
                     auto addr = strops::fmt_val_to_address_str(sym.get_data().value);
                     cmd.print_data("Set breakpoint at main(): ", addr);
-                    set_breakpoint(std::stol(std::string{addr, 2, 16}, 0, 16));
+                    set_breakpoint(std::stol(std::string{addr, 2, 16}, 0, 16), false);
                 }
             }
         }
@@ -581,13 +595,72 @@ void Debugger::debug_print() {
         }
         cmd.print_data(name);
     }
-    /*for(const auto& cu : m_dwarf.compilation_units()) {
-        if(dwarf::at_main_subprogram(cu.root())) {
-            for(const auto& die : cu.root()) {
-                if(dwarf::at_main_subprogram(die)) {
+}
 
+/**
+ * Sets breakpoint at the first source line of the function func.
+ * @param func
+ */
+void Debugger::set_breakpoint_at_function(const std::string &func) {
+    using namespace dwarf;
+    using std::pair;
+    std::vector<die> function_dies{};
+    if(auto lparens = func.find('(', 0); lparens != std::string::npos) {
+        for (const auto &cu : m_dwarf.compilation_units()) {
+            for (const auto &die : cu.root()) {
+                if (die.has(DW_AT::name) && at_name(die) == func) {
+                    function_dies.push_back(die);
+                    auto low_pc = at_low_pc(die);
+                    auto entry_iterator = get_line_entry_iterator_at(low_pc);
+                    entry_iterator++; // pass by the prologue of the function
+                    set_breakpoint(entry_iterator->address);
                 }
             }
         }
-    }*/
+    } else {
+        // this will be used for, finding functions, specifying parameter lists.
+        auto rparens  = func.find(')', lparens);
+        auto argument_list = func.substr(lparens+1, rparens-1);
+        auto tokens = strops::split(argument_list, ',');
+        std::vector<pair<std::string, std::string>> arg_list{};
+        for(auto& t : tokens) {
+            auto ts = strops::split(t, ' ');
+            arg_list.emplace_back(std::forward<pair<std::string, std::string>>(std::make_pair(ts[0], ts[1])));
+        }
+    }
+}
+
+std::vector<symbols::Symbol> Debugger::lookup_symbol(const std::string &name) {
+    std::vector<symbols::Symbol> symbols_found{};
+    for(auto& sec : m_elf.sections()) {
+        if(sec.get_hdr().type != elf::sht::symtab && sec.get_hdr().type == elf::sht::dynsym) {
+            continue; // if we aren't scanning the symbol table and dynamic symbol sections, just skip
+        }
+        for(auto sym : sec.as_symtab()) {
+            if(sym.get_name() == name) {
+                auto& data = sym.get_data();
+                symbols_found.emplace_back(symbols::Symbol{data.type(), name, data.value});
+            }
+        }
+    }
+    return symbols_found;
+}
+
+void Debugger::set_breakpoint_at_source_line(const std::string &file_name, unsigned line) {
+    for(const auto& cu : m_dwarf.compilation_units()) {
+        if(strops::is_suffix_of(file_name, dwarf::at_name(cu.root()))) {
+            const auto& lt = cu.get_line_table();
+            for(const auto& entry : lt) {
+                if(entry.is_stmt && entry.line == line) {
+                    set_breakpoint(entry.address);
+                }
+            }
+        }
+    }
+}
+
+void Debugger::step_source_line(Debugger::usize lines) {
+    // get current source line
+    // while (get_source_line() == current_source_line)
+    // keep stepping until false, and we have stepped a single source line.
 }
