@@ -82,8 +82,8 @@ Debugger::Debugger(const Debugger::String &program, pid_t pid) :
     m_program_name(program), m_pid(pid),
     m_breakpoints{}, setup(true),
     m_commands{construct_commands()},
-    cmd{"debug> ", false}, entered_main_subroutine(false),
-    m_symbol_lookup{} {
+    cmd{"debug> ", false}, entered_main_subroutine(false), m_symbol_lookup{}
+{
     setup_command_prompt();
     auto fd = open(m_program_name.value().c_str(), O_RDONLY);
     m_elf = elf::elf{elf::create_mmap_loader(fd)};
@@ -171,12 +171,24 @@ void Debugger::handle_command(std::string input)
         } else {
             std::vector<std::string> params{};
             std::copy(args.begin() + 1, args.end(), std::back_inserter(params));
-            for (const auto &address : params) {
-                if (address.find("0x", 0) == 0) {
-                    std::string param{address, 2};
-                    set_breakpoint(std::stol(param, nullptr, 16));
+            for(const auto& param : params) {
+                if(param.find(':') != std::string::npos) {
+                    auto ps = strops::split(param, ':');
+                    auto file = ps[0];
+                    try {
+                        auto line_no = std::stoi(ps[1], nullptr, 10);
+                        set_breakpoint_at_source_line(file, line_no);
+                    } catch(std::exception& e) {
+                        std::string msg = e.what();
+                        cmd.print_error("Exception caught: ", msg);
+                    }
                 } else {
-                    set_breakpoint(std::stol(address, nullptr, 16));
+                    if (param.find("0x", 0) == 0) {
+                        std::string address{address, 2};
+                        set_breakpoint(std::stol(param, nullptr, 16));
+                    } else {
+                        set_breakpoint(std::stol(param, nullptr, 16));
+                    }
                 }
             }
         }
@@ -185,8 +197,13 @@ void Debugger::handle_command(std::string input)
         listn_source_lines(line_iterator->file->path, line_iterator->line);
     } else if(command == "listn") {
         auto context = args.size() > 1 ? std::stol(args[1]) : 5;
-        auto line_iterator = get_line_entry_iterator_at(get_pc());
-        listn_source_lines(line_iterator->file->path, line_iterator->line, context);
+        try{
+            auto line_iterator = get_line_entry_iterator_at(get_pc());
+            listn_source_lines(line_iterator->file->path, line_iterator->line, context);
+        } catch(std::exception& e) {
+            std::string msg = e.what();
+            cmd.print_error(msg);
+        }
     } else if(command == "step") {
         stepn(1);
     } else if(command == "stepn") {
@@ -196,6 +213,8 @@ void Debugger::handle_command(std::string input)
             auto steps = std::stoul(args[1]);
             stepn(steps);
         }
+    } else if(command == "stepi") {
+        step_source_line(1);
     } else if (command == "quit") {
             this->m_running = false;
     } else if(command == "register") {
@@ -244,16 +263,9 @@ void Debugger::handle_command(std::string input)
             std::cout << "\r\nErrr???" << std::endl;
     }
 }
+
 Debugger::~Debugger() {}
-void Debugger::set_breakpoint(InstructionAddr address, bool print) {
-    std::stringstream ss{""};
-    if(print)
-        ss << "\r\nSetting breakpoint @ " << std::hex << address;
-    cmd.print_data(ss.str());
-    Breakpoint bp{m_pid.value(), address};
-    bp.enable();
-    m_breakpoints.insert({address, bp});
-}
+
 void Debugger::continue_execution() {
     step_over_breakpoint();
     ptrace(PTRACE_CONT, m_pid.value(), nullptr, nullptr);
@@ -382,22 +394,7 @@ void Debugger::write_memory(uint64_t address, uint64_t value) {
     ptrace(PTRACE_POKEDATA, m_pid.value(), address, value);
 }
 
-void Debugger::step_over_breakpoint(bool continue_after) {
-    // get program counter, to find out, where we are
-    // get breakpoint location in address, which should be where we are - 1
-    // this is, because when we hit an instruction, where we have placed int3,
-    // execution goes past the breakpoint
-    auto pc = get_pc();
-    if(m_breakpoints.count(pc) > 0) {
-        auto& bp = m_breakpoints[pc];
-        if(bp.is_enabled()) {
-            bp.disable();
-            ptrace(PTRACE_SINGLESTEP, m_pid.value(), nullptr, nullptr);
-            wait_for_signal();
-            bp.enable();
-        }
-    }
-}
+
 
 void Debugger::wait_for_signal() {
     int wait_status;
@@ -473,13 +470,7 @@ std::string Debugger::get_register_name(reg r) {
     return res->name;
 }
 
-void Debugger::stepn(Debugger::usize n) {
-    step_over_breakpoint();
-    for(auto i = 0; i < n; ++i) {
-     ptrace(PTRACE_SINGLESTEP, m_pid.value(), nullptr, nullptr);
-     wait_for_signal();
-    }
-}
+
 
 /**
  * Retrieves the function the program is currently in, when the program counter has value pc.
@@ -509,12 +500,15 @@ uint64_t Debugger::get_register_val_dwarf_index(unsigned reg_num) {
 }
 
 dwarf::line_table::iterator Debugger::get_line_entry_iterator_at(uint64_t pc) {
-    for(const auto& comp_unit : m_dwarf.compilation_units()) {
+    for(auto& comp_unit : m_dwarf.compilation_units()) {
         if(dwarf::die_pc_range(comp_unit.root()).contains(pc)) {
             auto& lt = comp_unit.get_line_table();
             auto it = lt.find_address(pc);
             if(it == lt.end()) {
-                throw std::out_of_range{"Line entry not found"};
+                auto v = get_pc();
+                auto prog_count = strops::fmt_val_to_address_str(v);
+                auto msg = strops::format("PC: _: Line entry not found", v);
+                throw std::out_of_range{msg};
             } else {
                 return it;
             }
@@ -550,6 +544,31 @@ void Debugger::listn_source_lines(const std::string &source_file, Debugger::usiz
     source.close();
 }
 
+void Debugger::stepn(Debugger::usize n) {
+    step_over_breakpoint();
+    for(auto i = 0; i < n; ++i) {
+        ptrace(PTRACE_SINGLESTEP, m_pid.value(), nullptr, nullptr);
+        wait_for_signal();
+    }
+}
+
+void Debugger::step_over_breakpoint(bool continue_after) {
+    // get program counter, to find out, where we are
+    // get breakpoint location in address, which should be where we are - 1
+    // this is, because when we hit an instruction, where we have placed int3,
+    // execution goes past the breakpoint
+    auto pc = get_pc();
+    if(m_breakpoints.count(pc) > 0) {
+        auto& bp = m_breakpoints[pc];
+        if(bp.is_enabled()) {
+            bp.disable();
+            ptrace(PTRACE_SINGLESTEP, m_pid.value(), nullptr, nullptr);
+            wait_for_signal();
+            bp.enable();
+        }
+    }
+}
+
 void Debugger::single_step_with_breakpoint_check() {
     if(m_breakpoints.count(get_pc())) {
         step_over_breakpoint();
@@ -563,21 +582,23 @@ void Debugger::single_step_instruction() {
     wait_for_signal();
 }
 
-
-void Debugger::set_breakpoint_at_main() {
-    cmd.print_data(strops::fmt_val_to_address_str(m_elf.get_hdr().entry));
-    for(const auto& sec : m_elf.sections()) {
-        auto name = sec.get_name();
-        if(name == ".symtab") {
-            for(auto sym : sec.as_symtab()) {
-                if(sym.get_name() == "main") {
-                    auto addr = strops::fmt_val_to_address_str(sym.get_data().value);
-                    cmd.print_data("Set breakpoint at main(): ", addr);
-                    set_breakpoint(std::stol(std::string{addr, 2, 16}, 0, 16), false);
-                }
+void Debugger::step_source_line(Debugger::usize lines) {
+    // get current source line
+    // while (get_source_line() == current_source_line)
+    // keep stepping until false, and we have stepped a single source line.
+        single_step_with_breakpoint_check();
+        auto value = read_memory(get_pc());
+        try {
+            auto line_iter = get_line_entry_iterator_at(get_pc());
+            auto next_line = line_iter->line+lines;
+            single_step_with_breakpoint_check();
+            while(line_iter->line < next_line) {
+                line_iter = get_line_entry_iterator_at(get_pc());
             }
+            listn_source_lines(line_iter->file->path, line_iter->line, 1);
+        } catch(std::exception& e) {
+
         }
-    }
 }
 
 void Debugger::debug_print() {
@@ -597,6 +618,16 @@ void Debugger::debug_print() {
     }
 }
 
+void Debugger::set_breakpoint(InstructionAddr address, bool print) {
+    std::stringstream ss{""};
+    if(print)
+        ss << "\r\nSetting breakpoint @ " << std::hex << address;
+    cmd.print_data(ss.str());
+    Breakpoint bp{m_pid.value(), address};
+    bp.enable();
+    m_breakpoints.insert({address, bp});
+}
+
 /**
  * Sets breakpoint at the first source line of the function func.
  * @param func
@@ -605,7 +636,7 @@ void Debugger::set_breakpoint_at_function(const std::string &func) {
     using namespace dwarf;
     using std::pair;
     std::vector<die> function_dies{};
-    if(auto lparens = func.find('(', 0); lparens != std::string::npos) {
+    if(auto lparens = func.find('(', 0); lparens == std::string::npos) {
         for (const auto &cu : m_dwarf.compilation_units()) {
             for (const auto &die : cu.root()) {
                 if (die.has(DW_AT::name) && at_name(die) == func) {
@@ -630,6 +661,35 @@ void Debugger::set_breakpoint_at_function(const std::string &func) {
     }
 }
 
+void Debugger::set_breakpoint_at_source_line(const std::string &file_name, unsigned line) {
+    for(const auto& cu : m_dwarf.compilation_units()) {
+        if(strops::is_suffix_of(file_name, dwarf::at_name(cu.root()))) {
+            const auto& lt = cu.get_line_table();
+            for(const auto& entry : lt) {
+                if(entry.is_stmt && entry.line == line) {
+                    set_breakpoint(entry.address);
+                }
+            }
+        }
+    }
+}
+
+void Debugger::set_breakpoint_at_main() {
+    for(const auto& sec : m_elf.sections()) {
+        auto name = sec.get_name();
+        if(name == ".symtab") {
+            for(auto sym : sec.as_symtab()) {
+                if(sym.get_name() == "main") {
+                    auto addr = strops::fmt_val_to_address_str(sym.get_data().value);
+                    cmd.print_data("Set breakpoint at main(): ", addr);
+                    set_breakpoint(std::stol(std::string{addr, 2, 16}, 0, 16), false);
+                }
+            }
+        }
+    }
+}
+
+
 std::vector<symbols::Symbol> Debugger::lookup_symbol(const std::string &name) {
     std::vector<symbols::Symbol> symbols_found{};
     for(auto& sec : m_elf.sections()) {
@@ -646,21 +706,79 @@ std::vector<symbols::Symbol> Debugger::lookup_symbol(const std::string &name) {
     return symbols_found;
 }
 
-void Debugger::set_breakpoint_at_source_line(const std::string &file_name, unsigned line) {
-    for(const auto& cu : m_dwarf.compilation_units()) {
-        if(strops::is_suffix_of(file_name, dwarf::at_name(cu.root()))) {
-            const auto& lt = cu.get_line_table();
-            for(const auto& entry : lt) {
-                if(entry.is_stmt && entry.line == line) {
-                    set_breakpoint(entry.address);
-                }
+std::optional<dwarf::line_table::iterator> Debugger::get_line_entry_at(uint64_t pc) {
+    for(auto& comp_unit : m_dwarf.compilation_units()) {
+        if(dwarf::die_pc_range(comp_unit.root()).contains(pc)) {
+            auto& lt = comp_unit.get_line_table();
+            auto it = lt.find_address(pc);
+            if(it == lt.end()) {
+                return {};
+            } else {
+                return {it};
             }
         }
     }
+    return {};
 }
 
-void Debugger::step_source_line(Debugger::usize lines) {
-    // get current source line
-    // while (get_source_line() == current_source_line)
-    // keep stepping until false, and we have stepped a single source line.
+void Debugger::step_out() {
+    auto frame_pointer = get_register_value(reg::rbp);
+    auto ret_addr = read_memory(frame_pointer+8);
+
+    auto remove_breakpoint = false;
+    if(!m_breakpoints.count(ret_addr)) {
+        set_breakpoint(ret_addr);
+        remove_breakpoint = true;
+    }
+    continue_execution();
+
+    if(remove_breakpoint)
+        remove_breakpoint(ret_addr);
+}
+
+void Debugger::remove_breakpoint(std::intptr_t address) {
+    if(m_breakpoints.count(address))
+    {
+        if(m_breakpoints.at(address).is_enabled())
+            m_breakpoints.at(address).disable();
+    }
+    m_breakpoints.erase(address);
+}
+
+void Debugger::step_in() {
+
+}
+
+void Debugger::step_over() {
+    auto function_die = get_function_at_pc(get_pc());
+    auto start = at_low_pc(function_die);
+    auto end = at_high_pc(function_die);
+
+    auto line = get_line_entry_iterator_at(start);
+    auto start_line = get_line_entry_iterator_at(get_pc());
+
+    std::vector<StepToBreakpoint> temporary_breakpoits{};
+    auto bps = 0;
+    while(line->address < end) {
+        if(line->address != start_line->address && !m_breakpoints.count(line->address))
+        {
+            auto addr = static_cast<long>(line->address);
+            StepToBreakpoint bp{m_pid.value(), addr};
+            bp.enable();
+            temporary_breakpoits.emplace_back(std::move(bp));
+            bps++;
+        }
+        ++line;
+    }
+
+    auto frame_pointer = get_register_value(reg::rbp);
+    auto retaddr = read_memory(frame_pointer+8);
+
+    if(!m_breakpoints.count(retaddr)) {
+        temporary_breakpoits.emplace_back(m_pid.value(), retaddr);
+        temporary_breakpoits[temporary_breakpoits.size()-1].enable();
+    }
+
+    continue_execution();
+    // the destructor should handle the disabling all of these breakpoints that has been set.
 }

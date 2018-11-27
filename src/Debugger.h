@@ -78,6 +78,7 @@ public:
     void handle_command(std::string input);
     /* ----------------------------------------*/
     std::optional<String> m_program_name;
+    CommandPrompt cmd;
 private:
 
     /* register commands    */
@@ -110,13 +111,19 @@ private:
     void set_breakpoint(InstructionAddr address, bool print=true);
     void set_breakpoint_at_main();
     void set_breakpoint_at_function(const std::string& func);
+    void set_breakpoint_at_source_line(const std::string& file_name, unsigned line);
+
+    void remove_breakpoint(std::intptr_t address);
+
     void single_step_with_breakpoint_check();
     void step_over_breakpoint(bool continue_after=false);
-    void set_breakpoint_at_source_line(const std::string& file_name, unsigned line);
-    void step_source_line(usize lines);
+    void step_source_line(usize lines=1);
     void single_step_instruction();
     void continue_execution();
     void stepn(usize n=1);                                              // todo: unimplemented. Step n instructions forward
+    void step_in();
+    void step_out();
+    void step_over();
     /*---------------------------*/
     void listn_source_lines(const std::string& source_file, usize line_num, usize context=5);                                // todo: unimplemented. List n source lines around this instruction address / location in source file
     void debug_print();
@@ -125,6 +132,7 @@ private:
     dwarf::die get_function_at_pc(uint64_t pc);
     dwarf::die get_die_at_pc(uint64_t pc, dwarf::DW_TAG tag);
     dwarf::line_table::iterator get_line_entry_iterator_at(uint64_t pc);
+    std::optional<dwarf::line_table::iterator> get_line_entry_at(uint64_t pc);
 
     siginfo_t get_signal_info();
 
@@ -132,14 +140,12 @@ private:
     std::map<InstructionAddr, Breakpoint> m_breakpoints;
     std::vector<std::string> m_commands;
     bool setup;
-    CommandPrompt cmd;
+
     bool m_running;
     bool entered_main_subroutine;
     dwarf::dwarf m_dwarf;
     elf::elf m_elf;
 
     std::vector<symbols::Symbol> lookup_symbol(const std::string &name);
-
-
     std::map<std::string, std::set<symbols::Symbol>> m_symbol_lookup;
 };

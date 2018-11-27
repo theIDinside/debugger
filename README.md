@@ -115,12 +115,12 @@ The frame pointer, points to the address where the return
 
 ## Custom features to be added
 - [x] Adding functionality for easy [setting of breakpoint](#bp_main) at main().
-- [] [Stepping into a function](#functions_into) 
-- [] [Stepping out of a function](#functions_out)
+- [ ] [Stepping into a function](#functions_into) 
+- [ ] [Stepping out of a function](#functions_out)
 - [x] [Setting breakpoint at function, using it's symbol name](#bp_using_symbol_name)
-- [] [Read variable](#read_var)
-- [] [Watch variable](#watch_var)
-- [] [Writing to a variable](#write_var)
+- [ ] [Read variable](#read_var)
+- [ ] [Watch variable](#watch_var)
+- [ ] [Writing to a variable](#write_var)
       
 
 ### Custom feature documentation
@@ -139,3 +139,13 @@ The frame pointer, points to the address where the return
 
 ## Advanced features to study and possibly implement
 - C++ symbol demangling. Possibly use 3rd party library. Maybe write a foreign function interface API to C or directly to C++ for that [rust lib?](http://fitzgeraldnick.com/2017/02/22/cpp-demangle.html)
+- Obtaining mapped memory regions within this process.
+
+- How do I find out what symbols are loaded from a library?
+.dyntab
+.symtab 
+
+- The step over function
+Quoting from (Writing a linux debugger)[https://blog.tartanllama.xyz/writing-a-linux-debugger-dwarf-step/]:
+> "Real debuggers will often examine what instruction is being executed and work out all of the possible branch targets, 
+then set breakpoints on all of them."

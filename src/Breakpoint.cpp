@@ -5,7 +5,8 @@
 #include <utility>
 #include "Breakpoint.h"
 
-Breakpoint::Breakpoint(pid_t pid, Breakpoint::InstructionAddress address) : m_pid(pid), m_addr(address),m_enabled{false}, m_saved_data{} {
+Breakpoint::Breakpoint(pid_t pid, InstructionAddress address, BreakType breakpoint_type)
+        : m_pid(pid), m_addr(address), m_enabled{false}, m_saved_data{}, m_breakpoint_type(BreakType::Permanent) {
 
 }
 

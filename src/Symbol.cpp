@@ -7,6 +7,7 @@
 #include "Symbol.h"
 #include "utils.h"
 
+
 std::string symbols::to_string(symbols::SymbolType symtype) {
     switch(symtype) {
         case SymbolType::NoType:

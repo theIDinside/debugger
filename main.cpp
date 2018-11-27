@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <string>
 #include "src/Debugger.h"
+#include <vector>
 
 enum Process: int {
     Child = 0,
@@ -10,6 +11,7 @@ enum Process: int {
 
 
 int main(int argc, char** argv) {
+    
     if(argc != 2) {
         std::cerr << "\r\nYou need to provide tracee in order to start debugging." << std::endl;
     } else if(argc >= 2) {

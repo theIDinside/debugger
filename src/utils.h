@@ -1,4 +1,4 @@
-#include <utility>
+
 
 //
 // Created by cx on 2018-11-18.
@@ -9,21 +9,22 @@
 #include <sstream>
 #include <type_traits>
 #include <iomanip>
+#include <utility>
 
-using StrVec = std::vector<std::string>;
-using Str = std::string;
 namespace strops {
-    auto is_prefix_of(const std::string& prefix, const std::string& str) {
+    using StrVec = std::vector<std::string>;
+    using Str = std::string;
+    inline auto is_prefix_of(const std::string& prefix, const std::string& str) {
         if (prefix.size() > str.size()) return false;
         return std::equal(prefix.cbegin(), prefix.cend(), str.cbegin());
     }
 
-    auto is_suffix_of(const std::string& suffix, const std::string& str) {
+    inline auto is_suffix_of(const std::string& suffix, const std::string& str) {
         if(suffix.size() > str.size()) return false;
-        return std::equal(suffix.rbegin(), suffix.rend(), str.rbegin());
+        return std::equal(suffix.crbegin(), suffix.crend(), str.crbegin());
     }
 
-    auto split(const std::string& data, const char delimiter=' ') ->  StrVec {
+    inline auto split(const std::string& data, const char delimiter=' ') ->  StrVec {
         auto v = StrVec{};
         std::stringstream ss{data};
         Str item_holder{};
@@ -31,7 +32,7 @@ namespace strops {
         return v;
     }
 
-    Str format_address(const Str& address) {
+    inline Str format_address(const Str& address) {
         auto pos = address.find_first_of("0x", 0, 2);
         if(pos == std::string::npos) {
             auto s = std::string{};
