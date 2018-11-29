@@ -6,3 +6,4 @@ build/
 resources/
 *.gch
 terminal_session.json
+.vscode/

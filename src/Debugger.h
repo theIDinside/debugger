@@ -140,4 +140,5 @@ private:
 
 
     std::map<std::string, symbols::Symbol> m_symbol_lookup;
+    std::map<std::string, symbols::Symbol> m_demangled_symbols;
 };

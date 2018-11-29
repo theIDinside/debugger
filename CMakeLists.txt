@@ -8,6 +8,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(HEAVYCPP ${PROJECT_SOURCE_DIR}/src/heavy_cpp.h.gch)
 set(HEAVYC ${PROJECT_SOURCE_DIR}/src/heavy_c.h.gch)
 
+# uses the PrecompiledHeader macro, that can be found here: https://github.com/larsch/cmake-precompiled-header
+include(PrecompiledHeader.cmake)
+
 message(${HEAVYCPP})
 string(ASCII 27 ESC)
 set(Blue "${ESC}[34m")
@@ -43,10 +46,15 @@ if($ENV{COLORTERM} STREQUAL "truecolor" AND ${RUNS_FROM_BASH})
 endif()
 
 
-set(SOURCES main.cpp src/Debugger.cpp src/Debugger.h src/Breakpoint.cpp src/Breakpoint.h src/Symbol.cpp src/Symbol.h src/utils.h src/heavy_cpp.h.gch src/heavy_c.h.gch)
+set(SOURCES main.cpp src/Debugger.cpp src/Debugger.h src/Breakpoint.cpp src/Breakpoint.h src/Symbol.cpp src/Symbol.h src/utils.h)
+set(HEAVY ${HEAVYCPP} ${HEAVYC})
 set(CMDPROMPT_LIB deps/command_prompt/src/cmdprompt/CommandPrompt.cpp deps/command_prompt/src/cmdprompt/CommandPrompt.h)
 add_library(command_prompt STATIC ${CMDPROMPT_LIB})
+
 add_executable(debugger ${SOURCES})
+add_precompiled_header(debugger ./src/heavy_cpp.h SOURCE_CXX ./src/heavy_cpp.cpp FORCEINCLUDE)
+add_precompiled_header(debugger ./src/heavy_c.h SOURCE_CXX ./src/heavy_c.cpp FORCEINCLUDE)
+
 add_executable(debugee ./tests/debugee.cpp)
 set_target_properties(debugee PROPERTIES COMPILE_FLAGS "-g -O0 -std=c++17 -Wall")
 

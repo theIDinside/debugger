@@ -29,7 +29,6 @@ namespace symbols {
         Symbol(elf::stt symtype, std::string name, symbol_address addr) : Symbol(to_symbol_type(symtype), std::move(name), addr) {}
         Symbol(const Symbol& cp) = default;
         ~Symbol() = default;
-        void demangle();
         std::optional<std::string> m_demangled_name{};
         type m_type;
         std::string m_name;
@@ -49,6 +48,6 @@ namespace symbols {
     CppSymbol from_mangled(std::string name);
 
 
-    std::string to_string(symbol_type symtype);
+    std::string to_string(const symbol_type& symtype);
     std::string to_string(Symbol& symbol);
 };

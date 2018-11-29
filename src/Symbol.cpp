@@ -8,7 +8,7 @@
 #include "utils.h"
 #include <cxxabi.h>
 
-std::string symbols::to_string(symbols::symbol_type symtype) {
+std::string symbols::to_string(const symbols::symbol_type& symtype) {
     switch(symtype) {
         case symbol_type::notype:
             return "notype";
@@ -46,9 +46,6 @@ std::string symbols::to_string(Symbol& sym) {
 
 symbols::Symbol::Symbol(symbols::Symbol::type symtype, std::string name, symbols::Symbol::symbol_address addr) : m_demangled_name{}, m_type(symtype), m_name(
         std::move(name)), m_addr(addr) {
-}
-
-void symbols::Symbol::demangle() {
     int stat;
     try {
         auto ptr = abi::__cxa_demangle(m_name.c_str(), nullptr, nullptr, &stat);
@@ -58,5 +55,4 @@ void symbols::Symbol::demangle() {
     } catch(...) {
         this->m_demangled_name = {};
     }
-
 }

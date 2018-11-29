@@ -767,7 +767,6 @@ std::optional<symbols::Symbol> Debugger::lookup_symbol(const std::string& name) 
                 if (sym.get_name() == name) {
                     auto &data = sym.get_data();
                     auto s = symbols::Symbol{data.type(), sym.get_name(), data.value};
-                    s.demangle();
                     return {s};
                 }
             }
@@ -789,7 +788,6 @@ void Debugger::build_symbol_mapset() {
             auto name = sym.get_name();
             auto t = name;
             symbols::Symbol s{data.type(), t, data.value};
-            s.demangle();
             auto key = s.m_demangled_name;
             m_symbol_lookup.try_emplace(key.value_or(name), s);
         }
@@ -884,8 +882,7 @@ void Debugger::list_symbols() {
 }
 
 void Debugger::show_symbol_db() {
-    for(auto[name, sym] : m_symbol_lookup) {
-        sym.demangle();
+    for(auto& [name, sym] : m_symbol_lookup) {
         auto d =
                 strops::format_msg("type: _ | name: _ | @[_]",
                         symbols::to_string(sym.m_type),                  // type
