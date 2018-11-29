@@ -2,4 +2,7 @@ playground/
 cmake-build-debug/
 build/
 .idea
-*libelfin/
+*libelfin/debugee
+resources/
+*.gch
+terminal_session.json

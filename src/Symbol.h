@@ -1,38 +1,40 @@
+#include <utility>
+
 //
 // Created by cx on 2018-11-25.
 //
 
 #pragma once
 #include <string>
+#include <optional>
 #include "../deps/libelfin/elf/elf++.hh"
 
 namespace symbols {
 
-    enum class SymbolType {
-        NoType,
-        Object,
-        Function,
-        Section,
-        File
+    enum class symbol_type {
+        notype,
+        object,
+        func,
+        section,
+        file
     };
 
-    SymbolType to_symbol_type(elf::stt sym);
-    std::string to_string(SymbolType symtype);
+    symbol_type to_symbol_type(elf::stt sym);
 
     struct Symbol {
-        using type = SymbolType;
+        using type = symbol_type;
         using symbol_address = uintptr_t;
-        Symbol();
+        Symbol() = default;
         Symbol(type symtype, std::string name, symbol_address addr);
-        Symbol(elf::stt symtype, std::string name, symbol_address addr) : Symbol(to_symbol_type(symtype), name, addr) {}
+        Symbol(elf::stt symtype, std::string name, symbol_address addr) : Symbol(to_symbol_type(symtype), std::move(name), addr) {}
+        Symbol(const Symbol& cp) = default;
         ~Symbol() = default;
-        Symbol(const Symbol& copy) = default;
-
-    protected:
+        void demangle();
+        std::optional<std::string> m_demangled_name{};
         type m_type;
         std::string m_name;
         std::uintptr_t m_addr;
-        std::string to_string();
+    protected:
     };
 
     struct CppSymbol : public Symbol {
@@ -42,7 +44,11 @@ namespace symbols {
 
         }
         ~CppSymbol() = default;
-        std::string m_mangled_name;
+        std::string m_demangled_name;
     };
     CppSymbol from_mangled(std::string name);
+
+
+    std::string to_string(symbol_type symtype);
+    std::string to_string(Symbol& symbol);
 };

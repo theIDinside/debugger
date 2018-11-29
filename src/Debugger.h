@@ -4,24 +4,11 @@
 #pragma once
 
 // c-includes
-#include <sys/wait.h>
-#include <sys/ptrace.h>
-#include <sys/user.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <zconf.h>
+#include "heavy_c.h"
 
 // standard cpp library
-#include <cstdint>
-#include <utility>
-#include <array>
-#include <string_view>
-#include <string>
-#include <map>
-#include <list>
-#include <set>
-#include <vector>
+#include "heavy_cpp.h"
+
 // my own & 3rd party libs
 #include "Breakpoint.h"
 #include "../deps/command_prompt/src/cmdprompt/CommandPrompt.h"
@@ -124,6 +111,7 @@ private:
     void step_in();
     void step_out();
     void step_over();
+    void list_symbols();
     /*---------------------------*/
     void listn_source_lines(const std::string& source_file, usize line_num, usize context=5);                                // todo: unimplemented. List n source lines around this instruction address / location in source file
     void debug_print();
@@ -146,6 +134,10 @@ private:
     dwarf::dwarf m_dwarf;
     elf::elf m_elf;
 
-    std::vector<symbols::Symbol> lookup_symbol(const std::string &name);
-    std::map<std::string, std::set<symbols::Symbol>> m_symbol_lookup;
+    void build_symbol_mapset();
+    std::optional<symbols::Symbol> lookup_symbol(const std::string&);
+    void show_symbol_db();
+
+
+    std::map<std::string, symbols::Symbol> m_symbol_lookup;
 };

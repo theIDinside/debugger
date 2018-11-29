@@ -9,6 +9,8 @@
 #include <wait.h>
 #include <sys/ptrace.h>
 #include <cstdint>
+#include <iostream>
+#include <iomanip>
 
 enum BreakType {
     Permanent,
@@ -47,8 +49,10 @@ public:
 
     }
     ~StepToBreakpoint() override {
-        if(is_enabled())
+        if(is_enabled()){
             disable();
+            std::cout << "disabling 0x" << std::setfill('0') << std::setw(16) << std::hex << m_addr << '\r' << std::endl;
+        }
     }
 };
 

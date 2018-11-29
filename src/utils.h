@@ -4,12 +4,8 @@
 // Created by cx on 2018-11-18.
 //
 #pragma once
-#include <string>
-#include <vector>
-#include <sstream>
-#include <type_traits>
-#include <iomanip>
-#include <utility>
+
+#include "heavy_cpp.h"
 
 namespace strops {
     using StrVec = std::vector<std::string>;
