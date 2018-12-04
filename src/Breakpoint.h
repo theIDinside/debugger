@@ -12,6 +12,20 @@
 #include <iostream>
 #include <iomanip>
 
+#ifndef SWAP_IN_INTERRUPT
+    #define SWAP_IN_INTERRUPT(x) static_cast<uint64_t>((x & ~0xff) | 0xcc)
+#endif
+
+
+
+constexpr uint64_t SWAP_IN_INTERRUPT_INSTRUCTION(uint64_t data) {
+    return ((data & ~0xff) | 0xcc);
+}
+
+constexpr uint64_t RESTORE_DATA(uint64_t data, uint8_t saved_data) {
+    return ((data & ~0xff) | saved_data);
+}
+
 enum BreakType {
     Permanent,
     Temporary
@@ -34,7 +48,6 @@ public:
 
     auto is_enabled() -> bool;
     auto get_address() -> InstructionAddress;
-
 protected:
     pid_t m_pid;
     InstructionAddress m_addr;
@@ -56,4 +69,7 @@ public:
     }
 };
 
+
+
 #endif //DEBUGGER_BREAKPOINT_H
+

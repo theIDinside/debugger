@@ -867,7 +867,7 @@ void Debugger::step_over() {
 
 void Debugger::list_symbols() {
     cmd.print_data("Listing symbols:");
-    for(auto[name, symbol] : m_symbol_lookup) {
+    for(const auto&[name, symbol] : m_symbol_lookup) {
         try {
             auto n = symbol.m_demangled_name.value_or(symbol.m_name);
             auto addr = symbol.m_addr;

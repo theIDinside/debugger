@@ -52,8 +52,8 @@ set(CMDPROMPT_LIB deps/command_prompt/src/cmdprompt/CommandPrompt.cpp deps/comma
 add_library(command_prompt STATIC ${CMDPROMPT_LIB})
 
 add_executable(debugger ${SOURCES})
-add_precompiled_header(debugger ./src/heavy_cpp.h SOURCE_CXX ./src/heavy_cpp.cpp FORCEINCLUDE)
-add_precompiled_header(debugger ./src/heavy_c.h SOURCE_CXX ./src/heavy_c.cpp FORCEINCLUDE)
+add_precompiled_header(debugger src/heavy_cpp.h SOURCE_CXX src/heavy_cpp.cpp FORCEINCLUDE)
+add_precompiled_header(debugger src/heavy_c.h SOURCE_CXX src/heavy_c.cpp FORCEINCLUDE)
 
 add_executable(debugee ./tests/debugee.cpp)
 set_target_properties(debugee PROPERTIES COMPILE_FLAGS "-g -O0 -std=c++17 -Wall")

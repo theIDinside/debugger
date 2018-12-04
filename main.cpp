@@ -15,6 +15,9 @@ int main(int argc, char** argv) {
     if(argc != 2) {
         std::cerr << "\r\nYou need to provide tracee in order to start debugging." << std::endl;
     } else if(argc >= 2) {
+        std::cout << "Keyboard shortcuts: " << '\n';
+        std::cout << "Ctrl + w: delete one word back" << '\n';
+        std::cout << "tab: try autocompletion of what's filled in" << '\n';
         auto pid = fork();
         if(pid == Process::Child) {
             auto prog = argv[1];
