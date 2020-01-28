@@ -2,3 +2,7 @@
 	path = deps/command_prompt
 	url = https://github.com/theIDinside/command_prompt
 	branch = master
+[submodule "deps/libelfin"]
+	path = deps/libelfin
+	url = https://github.com/TartanLlama/libelfin
+	branch = fbreg
