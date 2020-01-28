@@ -4,7 +4,7 @@ read sc_msg
 cd ./deps/command_prompt/
 git add -A
 git commit -m "$sc_msg"
-git push origin master
+git push origin working
 cd ..
 cd ..
 echo "Add commit message for parent repo: "
